@@ -82,10 +82,10 @@ async function  Header () {
                     </Link>
                 </DropdownMenuItem>
 
-                <DropdownMenuItem>
-                    <Link href={"/mocks/interview"} className="flex items-center gap-2">
-                        <PictureInPicture2 className="h-4 w-4"/>
-                        <span>Mock Interview</span>  
+                 <DropdownMenuItem>
+                    <Link href={"/interview"} className="flex items-center gap-2">
+                        <PictureInPicture2  className="h-4 w-4"/>
+                        <span>AI Interview Practice</span>  
                     </Link>
                 </DropdownMenuItem>
 

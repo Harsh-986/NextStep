@@ -33,6 +33,10 @@ model User{
   interviewAssess InterviewAssess[]
   resume  Resume?
   coverLetter CoverLetter[]
+  
+  // PrepWise Integration - Interview related fields
+  interviewSessions InterviewSession[]
+  callAnalytics CallAnalytics[]
 }
 
 model Assessment {
@@ -64,6 +68,74 @@ model InterviewAssess {
   @@index([userId])
 }
 
+// PrepWise Integration Models
+model InterviewSession {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  
+  // Session details
+  sessionType     String    // "mock", "practice", "assessment"
+  industry        String?   // From user's industry or selected for session
+  role            String?   // Target role for interview
+  difficulty      String?   // "beginner", "intermediate", "advanced"
+  duration        Int?      // Duration in minutes
+  
+  // Questions and responses
+  questions       Json[]    // Array of questions asked during interview
+  responses       Json[]    // Array of user responses with timestamps
+  
+  // Analysis and scoring
+  overallScore    Float?
+  technicalScore  Float?
+  communicationScore Float?
+  confidenceScore Float?
+  
+  // AI Analysis
+  strengths       String[]
+  weaknesses      String[]
+  improvementTips String[]
+  detailedFeedback String?  @db.Text
+  
+  // Session metadata
+  startedAt       DateTime?
+  endedAt         DateTime?
+  status          SessionStatus @default(SCHEDULED)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([userId])
+}
+
+model CallAnalytics {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  sessionId       String?   @unique // Link to InterviewSession
+  
+  // Call details
+  duration        Float?    // Call duration in seconds
+  cost            Float?    // Call cost
+  transcript      String?   @db.Text
+  
+  // Audio analysis
+  speakingTime    Float?    // User speaking time in seconds
+  silenceTime     Float?    // Silence duration
+  wordsPerMinute  Float?
+  fillerWordsCount Int?
+  
+  // Call metadata
+  startedAt       DateTime?
+  endedAt         DateTime?
+  metadata        Json?     // Additional metadata
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([userId])
+  @@index([sessionId])
+}
+
 model Resume {
   id          String    @id @default(cuid())
   userId      String    @unique    // One resume per user
@@ -90,9 +162,6 @@ model CoverLetter {
 
   @@index([userId])
 }
-
-
-
 
 // Combined Industry Trends and Salary Insights
 model IndustryInsight {
@@ -135,3 +204,10 @@ enum MarketOutlook{
   NEGATIVE
 }
 
+enum SessionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  FAILED
+}
