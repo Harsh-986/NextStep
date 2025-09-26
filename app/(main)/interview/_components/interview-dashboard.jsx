@@ -14,7 +14,9 @@ import {
   Target,
   Play,
   Plus,
-  BarChart3
+  BarChart3,
+  CheckCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -23,7 +25,10 @@ const InterviewDashboard = ({ sessions = [], onStartInterview, onCreateSession }
     totalSessions: 0,
     averageScore: 0,
     completedSessions: 0,
-    improvementRate: 0
+    improvementRate: 0,
+    averageTechnical: 0,
+    averageCommunication: 0,
+    averageConfidence: 0
   });
 
   useEffect(() => {
@@ -31,12 +36,28 @@ const InterviewDashboard = ({ sessions = [], onStartInterview, onCreateSession }
   }, [sessions]);
 
   const calculateStats = () => {
-    const completed = sessions.filter(s => s.status === 'COMPLETED');
+    const completed = sessions.filter(s => s.status === 'COMPLETED' && s.overallScore);
     const totalSessions = sessions.length;
     const completedSessions = completed.length;
     
     const averageScore = completedSessions > 0 
-      ? completed.reduce((sum, session) => sum + (session.overallScore || 0), 0) / completedSessions
+      ? Math.round(completed.reduce((sum, session) => sum + (session.overallScore || 0), 0) / completedSessions)
+      : 0;
+
+    // Calculate individual score averages
+    const technicalScores = completed.filter(s => s.technicalScore);
+    const averageTechnical = technicalScores.length > 0 
+      ? Math.round(technicalScores.reduce((sum, s) => sum + s.technicalScore, 0) / technicalScores.length)
+      : 0;
+
+    const communicationScores = completed.filter(s => s.communicationScore);
+    const averageCommunication = communicationScores.length > 0 
+      ? Math.round(communicationScores.reduce((sum, s) => sum + s.communicationScore, 0) / communicationScores.length)
+      : 0;
+
+    const confidenceScores = completed.filter(s => s.confidenceScore);
+    const averageConfidence = confidenceScores.length > 0 
+      ? Math.round(confidenceScores.reduce((sum, s) => sum + s.confidenceScore, 0) / confidenceScores.length)
       : 0;
 
     // Calculate improvement rate (comparing last 3 sessions with previous 3)
@@ -51,13 +72,16 @@ const InterviewDashboard = ({ sessions = [], onStartInterview, onCreateSession }
       ? previousSessions.reduce((sum, s) => sum + (s.overallScore || 0), 0) / previousSessions.length
       : 0;
 
-    const improvementRate = previousAvg > 0 ? ((recentAvg - previousAvg) / previousAvg) * 100 : 0;
+    const improvementRate = previousAvg > 0 ? Math.round(((recentAvg - previousAvg) / previousAvg) * 100) : 0;
 
     setStats({
       totalSessions,
-      averageScore: Math.round(averageScore),
+      averageScore,
       completedSessions,
-      improvementRate: Math.round(improvementRate)
+      improvementRate,
+      averageTechnical,
+      averageCommunication,
+      averageConfidence
     });
   };
 
@@ -208,6 +232,36 @@ const InterviewDashboard = ({ sessions = [], onStartInterview, onCreateSession }
                           </span>
                         )}
                       </div>
+
+                      {/* Show individual scores if available */}
+                      {session.status === 'COMPLETED' && (session.technicalScore || session.communicationScore || session.confidenceScore) && (
+                        <div className="flex items-center gap-3 mt-2 text-xs">
+                          {session.technicalScore && (
+                            <div className="flex items-center gap-1">
+                              <Brain className="h-3 w-3" />
+                              <span className={getScoreColor(session.technicalScore)}>
+                                Tech: {session.technicalScore}%
+                              </span>
+                            </div>
+                          )}
+                          {session.communicationScore && (
+                            <div className="flex items-center gap-1">
+                              <MessageSquare className="h-3 w-3" />
+                              <span className={getScoreColor(session.communicationScore)}>
+                                Comm: {session.communicationScore}%
+                              </span>
+                            </div>
+                          )}
+                          {session.confidenceScore && (
+                            <div className="flex items-center gap-1">
+                              <Target className="h-3 w-3" />
+                              <span className={getScoreColor(session.confidenceScore)}>
+                                Conf: {session.confidenceScore}%
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -218,6 +272,13 @@ const InterviewDashboard = ({ sessions = [], onStartInterview, onCreateSession }
                           {session.overallScore}%
                         </div>
                         <div className="text-xs text-muted-foreground">Overall</div>
+                      </div>
+                    )}
+
+                    {session.status === 'COMPLETED' && !session.overallScore && (
+                      <div className="text-right">
+                        <AlertTriangle className="h-4 w-4 text-yellow-500 mx-auto" />
+                        <div className="text-xs text-muted-foreground">No Score</div>
                       </div>
                     )}
                     
@@ -259,60 +320,97 @@ const InterviewDashboard = ({ sessions = [], onStartInterview, onCreateSession }
         </CardContent>
       </Card>
 
-      {/* Performance Overview */}
+      {/* Performance Overview - Enhanced with all scores */}
       {stats.completedSessions > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Technical Skills</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Brain className="h-4 w-4" />
+                Technical Skills
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Average Score</span>
-                  <span className="font-semibold">
-                    {Math.round(sessions.filter(s => s.technicalScore).reduce((sum, s) => sum + s.technicalScore, 0) / sessions.filter(s => s.technicalScore).length || 0)}%
+                  <span className={`font-semibold ${getScoreColor(stats.averageTechnical)}`}>
+                    {stats.averageTechnical > 0 ? `${stats.averageTechnical}%` : 'N/A'}
                   </span>
                 </div>
-                <Progress value={Math.round(sessions.filter(s => s.technicalScore).reduce((sum, s) => sum + s.technicalScore, 0) / sessions.filter(s => s.technicalScore).length || 0)} />
+                <Progress value={stats.averageTechnical} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  {sessions.filter(s => s.technicalScore).length} sessions with technical scores
+                </p>
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Communication</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                Communication
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Average Score</span>
-                  <span className="font-semibold">
-                    {Math.round(sessions.filter(s => s.communicationScore).reduce((sum, s) => sum + s.communicationScore, 0) / sessions.filter(s => s.communicationScore).length || 0)}%
+                  <span className={`font-semibold ${getScoreColor(stats.averageCommunication)}`}>
+                    {stats.averageCommunication > 0 ? `${stats.averageCommunication}%` : 'N/A'}
                   </span>
                 </div>
-                <Progress value={Math.round(sessions.filter(s => s.communicationScore).reduce((sum, s) => sum + s.communicationScore, 0) / sessions.filter(s => s.communicationScore).length || 0)} />
+                <Progress value={stats.averageCommunication} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  {sessions.filter(s => s.communicationScore).length} sessions with communication scores
+                </p>
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Confidence</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Confidence
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Average Score</span>
-                  <span className="font-semibold">
-                    {Math.round(sessions.filter(s => s.confidenceScore).reduce((sum, s) => sum + s.confidenceScore, 0) / sessions.filter(s => s.confidenceScore).length || 0)}%
+                  <span className={`font-semibold ${getScoreColor(stats.averageConfidence)}`}>
+                    {stats.averageConfidence > 0 ? `${stats.averageConfidence}%` : 'N/A'}
                   </span>
                 </div>
-                <Progress value={Math.round(sessions.filter(s => s.confidenceScore).reduce((sum, s) => sum + s.confidenceScore, 0) / sessions.filter(s => s.confidenceScore).length || 0)} />
+                <Progress value={stats.averageConfidence} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  {sessions.filter(s => s.confidenceScore).length} sessions with confidence scores
+                </p>
               </div>
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Debug Info for Development (remove in production) */}
+      {process.env.NODE_ENV === 'development' && stats.completedSessions > 0 && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardHeader>
+            <CardTitle className="text-base text-yellow-800">Debug Info (Dev Only)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-xs text-yellow-700 space-y-1">
+              <p>Completed sessions: {stats.completedSessions}</p>
+              <p>Sessions with technical scores: {sessions.filter(s => s.technicalScore).length}</p>
+              <p>Sessions with communication scores: {sessions.filter(s => s.communicationScore).length}</p>
+              <p>Sessions with confidence scores: {sessions.filter(s => s.confidenceScore).length}</p>
+              <p>Sessions with strengths: {sessions.filter(s => s.strengths?.length > 0).length}</p>
+              <p>Sessions with weaknesses: {sessions.filter(s => s.weaknesses?.length > 0).length}</p>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
