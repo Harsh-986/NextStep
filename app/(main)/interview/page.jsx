@@ -1,7 +1,7 @@
 import React from 'react';
 import { getUserOnboardingStatus } from '@/actions/user';
 import { redirect } from 'next/navigation';
-import { getInterviewSessions } from '@/actions/interview-session';
+import { getInterviewSessions, createInterviewSession, startInterviewWithQuestions } from '@/actions/interview-session';
 import InterviewClient from './_components/interview-client';
 
 const InterviewPage = async () => {
@@ -12,7 +12,9 @@ const InterviewPage = async () => {
 
   return (
     <div className="container mx-auto">
-      <InterviewClient sessions={sessions} />
+      <InterviewClient 
+        sessions={sessions}
+      />
     </div>
   );
 };

@@ -1,28 +1,21 @@
-import { useState } from "react";
-import { toast } from "sonner";
+// /hooks/use-fetch.js
+import { useCallback, useState } from "react";
 
-const useFetch = (cb) => {
-  const [data, setData] = useState(undefined);
-  const [loading, setLoading] = useState(null);
-  const [error, setError] = useState(null);
+export default function useFetch(fn) {
+  const [loading, setLoading] = useState(false);
 
-  const fn = async (...args) => {
+  const wrapped = useCallback(async (...args) => {
     setLoading(true);
-    setError(null);
-
     try {
-      const response = await cb(...args);
-      setData(response);
-      setError(null);
-    } catch (error) {
-      setError(error);
-      toast.error(error.message);
+      const result = await fn(...args); // IMPORTANT: return the value
+      return result;
+    } catch (err) {
+      console.error("useFetch - wrapped fn error:", err);
+      throw err; // rethrow so callers can handle it
     } finally {
       setLoading(false);
     }
-  };
+  }, [fn]);
 
-  return { data, loading, error, fn, setData };
-};
-
-export default useFetch;
+  return { loading, fn: wrapped };
+}
