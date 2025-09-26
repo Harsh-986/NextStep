@@ -26,23 +26,68 @@ export async function createInterviewSession(sessionData) {
         difficulty: sessionData.difficulty,
         techStack: sessionData.techStack,
         sessionType: sessionData.sessionType,
+        interviewType: sessionData.interviewType,
         questionCount: sessionData.questionCount,
+        industry: sessionData.industry,
+        customQuestions: sessionData.customQuestions, // Additional instructions
       });
 
       result = { questions: Array.isArray(questionsArray) ? questionsArray : [], interviewId: `prepwise-${Date.now()}` };
       console.log("DEBUG: generated questions directly:", result);
     } catch (genErr) {
       console.error("Question generation failed (direct):", genErr);
-      const fallback = [
-        "Tell me about yourself and your background.",
-        `What interests you most about working as a ${sessionData.role}?`,
-        "What are your greatest strengths?",
-        "Describe a challenging project you worked on.",
-        "How do you handle working under pressure?",
-        "Where do you see yourself in 5 years?",
-        "Why should we hire you for this position?",
-        "Do you have any questions for us?"
-      ];
+      
+      // Create fallback questions based on session type
+      const getFallbackQuestions = (sessionType, interviewType, questionCount) => {
+        const behavioralQuestions = [
+          "Tell me about yourself and your background.",
+          `What interests you most about working as a ${sessionData.role}?`,
+          "Describe a challenging situation you faced and how you handled it.",
+          "Tell me about a time you disagreed with a colleague.",
+          "How do you handle working under pressure?",
+          "Give me an example of when you went above and beyond.",
+          "Tell me about a time you failed and what you learned.",
+          "Describe your ideal work environment."
+        ];
+
+        const technicalQuestions = [
+          `What technical skills are most important for a ${sessionData.role}?`,
+          "Can you walk me through your problem-solving approach?",
+          "How do you stay updated with the latest technologies?",
+          "Describe a complex technical problem you solved.",
+          "What are your preferred development tools?",
+          "How do you ensure code quality?",
+          "Explain a recent technology you learned.",
+          "How do you approach system design?"
+        ];
+
+        const generalQuestions = [
+          "What are your greatest strengths?",
+          "Where do you see yourself in 5 years?",
+          "Why should we hire you for this position?",
+          "Do you have any questions for us?"
+        ];
+
+        let allQuestions = [];
+        
+        switch (interviewType) {
+          case 'behavioral':
+            allQuestions = [...behavioralQuestions, ...generalQuestions];
+            break;
+          case 'technical':
+            allQuestions = [...technicalQuestions, ...generalQuestions];
+            break;
+          case 'mixed':
+          default:
+            allQuestions = [...behavioralQuestions, ...technicalQuestions, ...generalQuestions];
+            break;
+        }
+
+        // Return the exact number of questions requested
+        return allQuestions.slice(0, questionCount || 8);
+      };
+
+      const fallback = getFallbackQuestions(sessionData.sessionType, sessionData.interviewType, sessionData.questionCount);
       result = { questions: fallback, interviewId: `prepwise-fallback-${Date.now()}` };
       console.log("DEBUG: Using fallback questions:", result);
     }
@@ -73,7 +118,7 @@ export async function createInterviewSession(sessionData) {
   }
 }
 
-// Generate questions using Gemini model
+// Generate questions using Gemini model with improved prompt
 export async function generateInterviewQuestions(sessionData) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -81,36 +126,238 @@ export async function generateInterviewQuestions(sessionData) {
   const user = await db.user.findUnique({ where: { clerkUserId: userId } });
   if (!user) throw new Error("User not found");
 
-  const prompt = `Prepare questions for a job interview.
-    The job role is ${sessionData.role}.
-    The job experience level is ${sessionData.difficulty || "Mid"}.
-    The tech stack used in the job is: ${sessionData.techStack || user.skills?.join(", ") || ""}.
-    The focus between behavioural and technical questions should lean towards: ${sessionData.sessionType || "Mixed"}.
-    The amount of questions required is: ${sessionData.questionCount || 4}.
-    Please return only the questions, without any additional text.
-    The questions are going to be read by a voice assistant so do not use "/" or "*" or any other special characters which might break the voice assistant.
-    Return the questions formatted like this:
-    ["Question 1", "Question 2", "Question 3"]
-    Thank you! <3`;
+  // Create different prompts based on session type
+  const getPromptForSessionType = (sessionType, interviewType, questionCount, role, difficulty, techStack, industry, customInstructions) => {
+    const basePrompt = `Generate exactly ${questionCount} interview questions for a ${role} position.`;
+    
+    let specificInstructions = "";
+    let focusInstructions = "";
+    
+    // Interview focus instructions
+    switch (interviewType) {
+      case 'behavioral':
+        focusInstructions = `
+        INTERVIEW FOCUS: BEHAVIORAL
+        - 90% behavioral questions (STAR method scenarios, past experiences, soft skills)
+        - 10% general questions
+        - Focus on: leadership, teamwork, problem-solving, communication, conflict resolution
+        - Ask about specific situations, challenges, and achievements
+        - Questions should start with phrases like "Tell me about a time...", "Describe a situation...", "Give me an example..."
+        `;
+        break;
+        
+      case 'technical':
+        focusInstructions = `
+        INTERVIEW FOCUS: TECHNICAL
+        - 90% technical questions (coding, system design, technical concepts, problem-solving)
+        - 10% general questions
+        - Focus on: technical skills, coding problems, architecture, best practices, debugging
+        - Include questions about specific technologies, algorithms, and technical decision-making
+        - Questions should assess technical depth and practical application
+        `;
+        break;
+        
+      case 'mixed':
+      default:
+        focusInstructions = `
+        INTERVIEW FOCUS: MIXED
+        - 50% technical questions
+        - 40% behavioral questions
+        - 10% general/company-culture questions
+        - Balanced approach covering both technical competency and soft skills
+        - Good mix of situational and technical problem-solving questions
+        `;
+        break;
+    }
+    
+    // Session type instructions
+    switch (sessionType) {
+      case 'assessment':
+        specificInstructions = `
+        SESSION TYPE: SKILLS ASSESSMENT (15 minutes, ${questionCount} questions)
+        - Quick, focused questions to assess core competencies
+        - Concise and direct
+        - Higher difficulty appropriate for assessment
+        `;
+        break;
+        
+      case 'practice':
+        specificInstructions = `
+        SESSION TYPE: PRACTICE SESSION (20 minutes, ${questionCount} questions)
+        - Moderate complexity suitable for practice
+        - Good variety for skill building
+        - Questions should be educational and help candidate improve
+        `;
+        break;
+        
+      case 'mock':
+      default:
+        specificInstructions = `
+        SESSION TYPE: FULL MOCK INTERVIEW (30+ minutes, ${questionCount} questions)
+        - Comprehensive real interview experience
+        - Varying complexity from basic to advanced
+        - Include follow-up style questions
+        - Simulate actual interview flow
+        `;
+        break;
+    }
+
+    // Custom instructions section
+    const customInstructionsSection = customInstructions && customInstructions.trim() 
+      ? `
+    SPECIAL INSTRUCTIONS FROM USER:
+    ${customInstructions.trim()}
+    
+    IMPORTANT: Pay special attention to the above instructions and incorporate them into the questions where relevant. If the user mentions specific technologies, frameworks, or topics to focus on, make sure to include questions about those areas.
+    ` 
+      : '';
+
+    return `${basePrompt}
+    
+    ${focusInstructions}
+    
+    ${specificInstructions}
+    
+    ${customInstructionsSection}
+    
+    Additional Context:
+    - Role: ${role}
+    - Experience level: ${difficulty || "intermediate"}
+    - Industry: ${industry || "General"}
+    - Tech stack/Skills: ${techStack || user.skills?.join(", ") || "Not specified"}
+    - Question count required: EXACTLY ${questionCount} questions
+    
+    Important Requirements:
+    - Return ONLY the questions as a JSON array
+    - Do not include any explanations or additional text
+    - Avoid special characters that might break voice assistants (/, *, etc.)
+    - Make questions clear and conversational
+    - Ensure questions are appropriate for the specified experience level
+    - Strictly follow the interview focus percentages specified above
+    ${customInstructions ? '- Incorporate the user\'s special instructions where appropriate' : ''}
+    
+    Format your response as:
+    ["Question 1", "Question 2", "Question 3", ...]
+    
+    Generate exactly ${questionCount} questions now.`;
+  };
+
+  const prompt = getPromptForSessionType(
+    sessionData.sessionType,
+    sessionData.interviewType,
+    sessionData.questionCount,
+    sessionData.role,
+    sessionData.difficulty,
+    sessionData.techStack,
+    sessionData.industry,
+    sessionData.customQuestions // Pass the additional instructions
+  );
 
   try {
     const result = await model.generateContent(prompt);
     const response = result.response;
     const text = response.text();
     const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
-    return JSON.parse(cleanedText);
+    
+    const questions = JSON.parse(cleanedText);
+    
+    // Ensure we have the right number of questions
+    if (Array.isArray(questions) && questions.length !== sessionData.questionCount) {
+      console.warn(`Generated ${questions.length} questions but expected ${sessionData.questionCount}`);
+      
+      if (questions.length > sessionData.questionCount) {
+        return questions.slice(0, sessionData.questionCount);
+      } else {
+        // If we have too few, pad with generic questions
+        const genericQuestions = [
+          "Tell me about a challenging situation you faced and how you handled it.",
+          "What motivates you in your work?",
+          "How do you handle feedback and criticism?",
+          "Describe your ideal work environment.",
+          "What questions do you have for me about this role?"
+        ];
+        
+        const needed = sessionData.questionCount - questions.length;
+        const additional = genericQuestions.slice(0, needed);
+        return [...questions, ...additional];
+      }
+    }
+    
+    return questions;
   } catch (error) {
     console.error("Error generating interview questions:", error);
-    return [
-      "Tell me about yourself and your background.",
-      `What interests you most about working as a ${sessionData.role}?`,
-      "What are your greatest strengths?",
-      "Describe a challenging project you worked on.",
-      "How do you handle working under pressure?",
-      "Where do you see yourself in 5 years?",
-      "Why should we hire you for this position?",
-      "Do you have any questions for us?"
-    ];
+    
+    // Return session-type specific fallback questions
+    const createFallbackQuestions = (sessionType, interviewType, questionCount, role) => {
+      const behavioralQuestions = [
+        "Tell me about yourself and your background.",
+        "Describe a challenging situation you faced and how you handled it.",
+        "Tell me about a time you disagreed with a colleague and how you resolved it.",
+        "Give me an example of when you had to work under tight deadlines.",
+        "Describe a time when you had to learn something new quickly.",
+        "Tell me about a project you're particularly proud of.",
+        "How do you handle feedback and criticism?",
+        "Describe a situation where you had to work with a difficult team member.",
+        "Tell me about a time you failed and what you learned from it.",
+        "Give me an example of when you went above and beyond in your work.",
+        "How do you prioritize your tasks when you have multiple deadlines?",
+        "Tell me about a time you had to make a difficult decision."
+      ];
+
+      const technicalQuestions = [
+        `What technical skills are essential for a ${role}?`,
+        "How do you approach problem-solving in your technical work?",
+        "Can you walk me through your development/work process?",
+        "How do you stay current with industry trends and technologies?",
+        "Describe a complex technical problem you solved recently.",
+        "What are your preferred tools and technologies for this role?",
+        "How do you ensure code quality and maintainability?",
+        "Explain a technical concept you recently learned.",
+        "How do you approach debugging and troubleshooting?",
+        "What's your experience with system design and architecture?",
+        "How do you handle technical debt and legacy systems?",
+        "Describe your testing and quality assurance practices."
+      ];
+
+      const generalQuestions = [
+        `What interests you most about working as a ${role}?`,
+        "What are your greatest strengths?",
+        "Where do you see yourself in 5 years?",
+        "Why should we hire you for this position?",
+        "What motivates you in your work?",
+        "How do you handle working under pressure?",
+        "What questions do you have for us?",
+        "What's your ideal work environment?"
+      ];
+
+      let questions = [];
+      
+      // Select questions based on interview type
+      switch (interviewType) {
+        case 'behavioral':
+          questions = [...behavioralQuestions, ...generalQuestions.slice(0, 2)];
+          break;
+        case 'technical':
+          questions = [...technicalQuestions, ...generalQuestions.slice(0, 2)];
+          break;
+        case 'mixed':
+        default:
+          const techCount = Math.floor(questionCount * 0.5);
+          const behavioralCount = Math.floor(questionCount * 0.4);
+          const generalCount = questionCount - techCount - behavioralCount;
+          
+          questions = [
+            ...technicalQuestions.slice(0, techCount),
+            ...behavioralQuestions.slice(0, behavioralCount),
+            ...generalQuestions.slice(0, generalCount)
+          ];
+          break;
+      }
+
+      return questions.slice(0, questionCount);
+    };
+
+    return createFallbackQuestions(sessionData.sessionType, sessionData.interviewType, sessionData.questionCount, sessionData.role);
   }
 }
 
@@ -236,11 +483,11 @@ export async function generateFeedbackFromTranscript(sessionId, transcript, mess
       const fallbackFeedback = {
         totalScore: 50,
         categoryScores: [
-          { name: "Communication Skills", score: 50, comment: "No transcript provided" },
-          { name: "Technical Knowledge", score: 50, comment: "No transcript provided" },
-          { name: "Problem Solving", score: 50, comment: "No transcript provided" },
-          { name: "Cultural Fit", score: 50, comment: "No transcript provided" },
-          { name: "Confidence and Clarity", score: 50, comment: "No transcript provided" }
+          { name: "Communication Skills", score: 0, comment: "No transcript provided" },
+          { name: "Technical Knowledge", score: 0, comment: "No transcript provided" },
+          { name: "Problem Solving", score: 0, comment: "No transcript provided" },
+          { name: "Cultural Fit", score: 0, comment: "No transcript provided" },
+          { name: "Confidence and Clarity", score: 0, comment: "No transcript provided" }
         ],
         strengths: [],
         areasForImprovement: ["Transcript not available"],
