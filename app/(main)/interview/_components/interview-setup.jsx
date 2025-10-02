@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -28,6 +28,7 @@ const InterviewSetup = ({ user, onSessionCreate, onCancel, isLoading }) => {
       role: '',
       difficulty: 'intermediate',
       duration: 30,
+      questionCount: 12,
       customQuestions: ''
     }
   });
@@ -35,30 +36,43 @@ const InterviewSetup = ({ user, onSessionCreate, onCancel, isLoading }) => {
   const sessionType = watch('sessionType');
   const difficulty = watch('difficulty');
   const duration = watch('duration');
+  const questionCount = watch('questionCount');
 
   const sessionTypes = [
     {
-      id: 'mock',
-      title: 'Mock Interview',
-      description: 'Full interview simulation with comprehensive feedback',
-      duration: [20, 30, 45, 60],
-      icon: <Target className="h-5 w-5" />
+      id: 'assessment',
+      title: 'Skills Assessment',
+      description: 'Focused technical evaluation with scoring',
+      duration: 15,
+      questionCount: 4,
+      icon: <Settings className="h-5 w-5" />
     },
     {
       id: 'practice',
       title: 'Practice Session',
       description: 'Quick practice with specific question types',
-      duration: [10, 15, 20],
+      duration: 20,
+      questionCount: 8,
       icon: <GraduationCap className="h-5 w-5" />
     },
     {
-      id: 'assessment',
-      title: 'Skills Assessment',
-      description: 'Focused technical evaluation with scoring',
-      duration: [15, 25, 35],
-      icon: <Settings className="h-5 w-5" />
+      id: 'mock',
+      title: 'Mock Interview',
+      description: 'Full interview simulation with comprehensive feedback',
+      duration: 30,
+      questionCount: 12,
+      icon: <Target className="h-5 w-5" />
     }
   ];
+
+  // Auto-update duration and question count when session type changes
+  useEffect(() => {
+    const selectedType = sessionTypes.find(type => type.id === sessionType);
+    if (selectedType) {
+      setValue('duration', selectedType.duration);
+      setValue('questionCount', selectedType.questionCount);
+    }
+  }, [sessionType, setValue]);
 
   const difficultyLevels = [
     {
@@ -162,17 +176,18 @@ const InterviewSetup = ({ user, onSessionCreate, onCancel, isLoading }) => {
                           <div className="text-primary mt-0.5">
                             {type.icon}
                           </div>
-                          <div>
+                          <div className="flex-1">
                             <h3 className="font-semibold">{type.title}</h3>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-sm text-muted-foreground mb-2">
                               {type.description}
                             </p>
-                            <div className="flex gap-1 mt-2">
-                              {type.duration.map((dur) => (
-                                <Badge key={dur} variant="outline" className="text-xs">
-                                  {dur}min
-                                </Badge>
-                              ))}
+                            <div className="flex gap-2">
+                              <Badge variant="outline" className="text-xs">
+                                {type.duration} min
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {type.questionCount} questions
+                              </Badge>
                             </div>
                           </div>
                         </div>
@@ -269,29 +284,25 @@ const InterviewSetup = ({ user, onSessionCreate, onCancel, isLoading }) => {
                 </RadioGroup>
               </div>
 
-              {/* Duration */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
+              {/* Session Configuration Display (Read-only) */}
+              <div className="p-4 bg-muted/50 rounded-lg border">
+                <h4 className="font-medium mb-2 flex items-center gap-2">
                   <Clock className="h-4 w-4" />
-                  Duration (minutes)
-                </Label>
-                <Select
-                  value={duration.toString()}
-                  onValueChange={(value) => setValue('duration', parseInt(value))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sessionTypes
-                      .find(type => type.id === sessionType)
-                      ?.duration.map((dur) => (
-                      <SelectItem key={dur} value={dur.toString()}>
-                        {dur} minutes
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  Session Configuration
+                </h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Duration:</span>
+                    <span className="ml-2 font-medium">{duration} minutes</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Questions:</span>
+                    <span className="ml-2 font-medium">{questionCount} questions</span>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Configuration is automatically set based on your selected interview type.
+                </p>
               </div>
 
               <div className="flex justify-between pt-4">
@@ -342,6 +353,10 @@ const InterviewSetup = ({ user, onSessionCreate, onCancel, isLoading }) => {
                   <div>
                     <span className="text-muted-foreground">Duration:</span>
                     <span className="ml-2 font-medium">{duration} minutes</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Questions:</span>
+                    <span className="ml-2 font-medium">{questionCount} questions</span>
                   </div>
                   {watch('industry') && (
                     <div className="md:col-span-2">

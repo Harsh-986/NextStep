@@ -1,4 +1,4 @@
-import { handleInterviewComplete } from "@/actions/interview-session";
+import { handleInterviewComplete, getInterviewSession } from "@/actions/interview-session";
 import { NextResponse } from "next/server";
 
 export async function POST(request) {
